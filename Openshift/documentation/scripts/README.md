@@ -1,12 +1,12 @@
 Run below to get help.
 
 ```sh
-./docDataExtracter.sh -n 
+./docDataExtracter.sh -n hosts -I -P -p -A -a -y -z -e -d
 
 [-n INVENTORY_FILE_PATH] 
-                             [-I MASTER_INTERNAL_URL] 
-                             [-P MASTER_PUBLIC_URL ] 
-                             [-p MASTER_PUB_CERT_FILE_PATH]
+[-I MASTER_INTERNAL_URL] 
+[-P MASTER_PUBLIC_URL ] 
+[-p MASTER_PUB_CERT_FILE_PATH]
                              [-A WILDCARD_APP_SUBDOMAIN ]
                              [-a WILDCARD_APP_CERT_FILE_PATH]
                              [-y INTERMEDIATE_CERT_FILE_PATH]
