@@ -3,6 +3,9 @@
 mkdir ocpvalidation
 cd ocpvalidation
 
+#check ansible.cfg for changes.
+#iostats
+
 ########### Check subscriptions attached ###########
 ansible -i $INVENTORY_FILE_PATH OSEv3 -a 'subscription-manager list --consumed' > subscription.log
 
