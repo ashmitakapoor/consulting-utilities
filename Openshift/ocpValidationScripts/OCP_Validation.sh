@@ -1,10 +1,13 @@
 #! /bin/bash
 
+$1=INVENTORY_FILE_PATH
+$2=ELASTICSEARCH_APP_POD
+$3=ELASTICSEARCH_OPS_POD
+
 mkdir ocpvalidation
 cd ocpvalidation
 
-#check ansible.cfg for changes.
-#iostats
+########### Check ansible.cfg file for changes ######
 
 ########### Check subscriptions attached ###########
 ansible -i $INVENTORY_FILE_PATH OSEv3 -a 'subscription-manager list --consumed' > subscription.log
@@ -56,7 +59,6 @@ oc get nodes > nodestatus.log
 
 ##### Verify web-console installation #####
 
-
 ################################ ETCD ##############################
 ########### verify etcd install ###########
 ansible -i $INVENTORY_FILE_PATH OSEv3 -a 'yum install etcd' > etcdinstalllog
@@ -74,27 +76,12 @@ oc -n default get deploymentconfigs/router > routerhealth.log
 ############################## Registry ##############################
 oc -n default get deploymentconfigs/docker-registry > registryhealth.log
 ############ Verify Registry Storage ##########
-oc get pvc -n default
+oc get pvc -n default > registryPVC.log
 
 ############################## Metric ##############################
-oc get pvc -n openshift-infra
-oc project openshift-metrics-server
-
-############Scale pod up/down to verify hpa############
-oc autoscale dc/<> --min 1 --max 10 --cpu-percent=80
+oc get pvc -n openshift-infra > metricsPVC.log
 
 ############ Network ##########
-#Verify SkyDNS
-dig *.tclservices.tatacapital.com 
-
-dig +short docker-registry.default.svc.cluster.local
-#should match
-oc get svc/docker-registry -n default
-
-#On any node
-curl https://internal-master.example.com:443/version
-curl -k https://master.example.com:443/healthz
-
 oc get clusternetwork > clusternetwork.log
 oc get hostsubnets > hostsubnets.log
 oc get netnamespaces > netnamespaces.log
@@ -120,24 +107,23 @@ oc get pv > pv.log
 ############ User ##########
 oc get users > users.log
 
-
-############ E2E OCP check##########
-oc new-project validate
-oc new-app cakephp-mysql-example
-oc logs -f bc/cakephp-mysql-example
-oc get pods
-oc rsh pods <podname>
-#internal registry is reachable from within the pod and outside the pod
-curl -kv https://docker-registry.default.svc.cluster.local:5000/healthz
-#Visit the application URL
-oc delete project validate
-
 ############ All pod unhealthy ##########
 oc get pods --all-namespaces | egrep -v 'Running | Completed' > podUnhealthy.log
 
-############ Ansible based health check ##########
-ansible-playbook -i $INVENTORY_FILE_PATH OSEv3 playbooks/openshift-checks/health.yml
-# https://access.redhat.com/documentation/en-us/openshift_container_platform/3.11/html-single/cluster_administration/index#ansible-based-tooling-health-checks
+################ Verify EFK setup #############
 
-
-################ Verify CICD setup #############
+########Elasticsearch health########
+oc exec $ELASTICSEARCH_APP_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/health?v > esAppHealth.log
+oc exec $ELASTICSEARCH_OPS_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/health?v > esOpsHealth.log
+########Node Status########
+oc exec $ELASTICSEARCH_APP_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/nodes?v > esNodeAppHealth.log
+oc exec $ELASTICSEARCH_OPS_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/nodes?v > esNodeOpsHealth.log
+########Index Health########
+oc exec $ELASTICSEARCH_APP_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/indices?v > IndexAppHealth.log
+oc exec $ELASTICSEARCH_OPS_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/indices?v > IndexOpsHealth.log
+########Unassigned Shards afect health of the cluster########
+oc exec $ELASTICSEARCH_APP_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/shards?h=index,shard,prirep,state,unassigned.reason | grep UNASSIGNED >unassignedShardApp.log
+oc exec $ELASTICSEARCH_OPS_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/shards?h=index,shard,prirep,state,unassigned.reason | grep UNASSIGNED >unassignedShardOps.log
+########ThreadPool########
+oc exec $ELASTICSEARCH_APP_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/thread_pool?v\&h=host,bulk.completed,bulk.rejected,bulk.queue,bulk.active,bulk.queueSize
+oc exec $ELASTICSEARCH_OPS_POD -- curl -s --key /etc/elasticsearch/secret/admin-key --cert /etc/elasticsearch/secret/admin-cert --cacert /etc/elasticsearch/secret/admin-ca https://localhost:9200/_cat/thread_pool?v\&h=host,bulk.completed,bulk.rejected,bulk.queue,bulk.active,bulk.queueSize
